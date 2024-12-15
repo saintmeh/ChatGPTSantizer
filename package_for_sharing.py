@@ -168,7 +168,7 @@ def search_sensitive_data(directory):
         "XML AWS Secret Key": r"<awsSecretAccessKey>\s*([A-Za-z0-9/+]{40})\s*</awsAccessKey>",
 
         # Config File Patterns
-        "Config API Key": r"(?i)(api_key|auth_token|access_token)\s*[:=]\s*[\"']?([A-Za-z0-9_\-]{16,})[\"']?",
+        "Config API Key": r"(?i)(form_secret|registration_shared_secret|macaroon_secret_key|api_key|auth_token|access_token)\s*[:=]\s*[\"']?([A-Za-z0-9_\-]{16,})[\"']?",
         "Config Database Password": r"(?i)(db_password|database_password|password)\s*[:=]\s*[\"']?([^\"'\n]+)[\"']?",
         "Config Bearer Token": r"(?i)(bearer_token|token)\s*[:=]\s*[\"']?([A-Za-z0-9_\-]{20,})[\"']?",
         "Config Env Password": r"(?i)(secret|password|api_key|token)_env\s*[:=]\s*[\"']?([^\s\"';]+)[\"']?",
