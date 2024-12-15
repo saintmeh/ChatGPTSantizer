@@ -244,14 +244,17 @@ if __name__ == "__main__":
         sys.exit(1)
 
     if os.path.isdir(directory_to_scan):
+        log_file = "config_and_source_files.log"
+        tree_file = "directory_tree.log"
+        
         delete_known_fat_folders_and_files(directory_to_scan)
         delete_folders(directory_to_scan, 'venv')
         delete_folders(directory_to_scan, '.git')
         redact_folders(directory_to_scan, 'images')
         redact_folders(directory_to_scan, 'accounts')
 
-        cat_config_and_source_files(directory, log_file)
-        save_tree_output(directory, tree_file)
+        cat_config_and_source_files(directory_to_scan, log_file)
+        save_tree_output(directory_to_scan, tree_file)
 
         results = search_sensitive_data(directory_to_scan)
         if results:
