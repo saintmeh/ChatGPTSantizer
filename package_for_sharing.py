@@ -6,12 +6,15 @@ import sys
 import zipfile
 import stat
 
+
 def is_config_or_source_file(file_name):
     """
     Determine if a file is likely a configuration or user source file.
     """
-    extensions = ['.conf', '.json', '.yaml', '.yml', '.ini', '.sh', '.py', '.pl', '.rb', '.java', '.js', '.ts', '.c', '.cpp', '.h', '.html', '.css', '.xml', '.service', '.timer']
+    extensions = ['.conf', '.json', '.yaml', '.yml', '.ini', '.sh', '.py', '.pl', '.rb', '.java', '.js', '.ts', '.c',
+                  '.cpp', '.h', '.html', '.css', '.xml', '.service', '.timer']
     return any(file_name.endswith(ext) for ext in extensions)
+
 
 def cat_config_and_source_files(directory, log_file):
     """
@@ -35,7 +38,8 @@ def cat_config_and_source_files(directory, log_file):
                             log.write(f.read())
                     except Exception as e:
                         log.write(f"Error reading {file_path}: {e}\n")
-               
+
+
 def save_tree_output(directory, tree_file):
     """
     Generate a tree-like structure of the directory and save to a file.
@@ -55,7 +59,8 @@ def save_tree_output(directory, tree_file):
                     tree.write(f"{sub_indent}{f}\n")
     except Exception as e:
         print(f"Error generating tree output: {e}")
-         
+
+
 def redact_folders(directory, folder_name):
     """
     GETTING STARTED:
@@ -88,7 +93,7 @@ def redact_folders(directory, folder_name):
                         try:
                             # Ensure the file is writable by modifying permissions
                             os.chmod(file_path, stat.S_IWUSR)
-                            
+
                             # Overwrite the file with a blank file
                             with open(file_path, 'w') as blank_file:
                                 blank_file.write("")
@@ -97,6 +102,7 @@ def redact_folders(directory, folder_name):
                             print(f"Error redacting file {file_path}: {e}")
             except Exception as e:
                 print(f"Error processing folder {folder_path}: {e}")
+
 
 def delete_folders(directory, folder_name):
     """
@@ -116,6 +122,7 @@ def delete_folders(directory, folder_name):
                 print(f"Deleted: {folder_path}")
             except Exception as e:
                 print(f"Error deleting {folder_path}: {e}")
+
 
 def delete_known_fat_folders_and_files(directory):
     """
@@ -143,16 +150,21 @@ def delete_known_fat_folders_and_files(directory):
         else:
             print(f"{name} not found: {absolute_path}")
 
-def search_sensitive_data(directory):
+
+def search_sensitive_data(directory, auto_redact=False):
     """
     Search for sensitive data like API keys and passwords in the specified directory.
 
     Args:
         directory (str): The directory to scan.
+        auto_redact (bool): Whether to overwrite sensitive values with 'AUTOREDACTED'
+            and rename keys by appending 'REDACTED' to their names.
 
     Returns:
         list: A list of sensitive data entries found.
     """
+    import fileinput
+
     patterns = {
         # JSON Patterns
         "JSON API Key": r"(?i)\"(apiKey|authToken|accessToken)\":\s*[\"']([A-Za-z0-9_\-]{16,})[\"']",
@@ -160,20 +172,14 @@ def search_sensitive_data(directory):
         "JSON AWS Secret Key": r"(?i)\"awsSecretAccessKey\":\s*[\"']([A-Za-z0-9/+]{40})[\"']",
         "JSON Database Password": r"(?i)\"(dbPassword|databasePassword|dbPass)\":\s*[\"']([^\"']+)[\"']",
         "JSON JWT Secret": r"(?i)\"(jwtSecret|jwtKey)\":\s*[\"']([A-Za-z0-9_\-]{32,})[\"']",
-
-        # XML Patterns
-        "XML API Key": r"<(apiKey|authToken|accessToken)>\s*([A-Za-z0-9_\-]{16,})\s*</\1>",
-        "XML Database Password": r"<(dbPassword|databasePassword|password)>\s*([^<]+)\s*</\1>",
-        "XML AWS Access Key": r"<awsAccessKeyId>\s*([A-Za-z0-9]{16,20})\s*</awsAccessKeyId>",
-        "XML AWS Secret Key": r"<awsSecretAccessKey>\s*([A-Za-z0-9/+]{40})\s*</awsAccessKey>",
+        "secretapikey": r"(?i)secretapikey\s*[:=]\s*[\"']?([^\s\"'\n]+)[\"']?",
 
         # Config File Patterns
         "Config API Key": r"(?i)(form_secret|registration_shared_secret|macaroon_secret_key|api_key|auth_token|access_token)\s*[:=]\s*[\"']?([A-Za-z0-9_\-]{16,})[\"']?",
         "Config Database Password": r"(?i)(db_password|database_password|password)\s*[:=]\s*[\"']?([^\"'\n]+)[\"']?",
-        "Config Bearer Token": r"(?i)(bearer_token|token)\s*[:=]\s*[\"']?([A-Za-z0-9_\-]{20,})[\"']?",
-        "Config Env Password": r"(?i)(secret|password|api_key|token)_env\s*[:=]\s*[\"']?([^\s\"';]+)[\"']?",
-        "Config AWS Access Key": r"(?i)aws_access_key_id\s*[:=]\s*[\"']?([A-Za-z0-9]{16,20})[\"']?",
-        "Config AWS Secret Key": r"(?i)aws_secret_access_key\s*[:=]\s*[\"']?([A-Za-z0-9/+]{40})[\"']?",
+        "registration_shared_secret": r"(?i)(registration_shared_secret)\s*[:=]\s*[\"']?([^\s\"'\n]+)[\"']?",
+        "macaroon_secret_key": r"(?i)(macaroon_secret_key)\s*[:=]\s*[\"']?([^\s\"'\n]+)[\"']?",
+        "form_secret": r"(?i)(form_secret)\s*[:=]\s*[\"']?([^\s\"'\n]+)[\"']?",
     }
 
     results = []
@@ -181,25 +187,49 @@ def search_sensitive_data(directory):
     for root, _, files in os.walk(directory):
         for file in files:
             try:
-                if not file.endswith(('.py', '.js', '.env', '.config', '.txt', '.json', '.yaml', '.yml')):
+                if not file.endswith((
+                        '.py', '.js', '.env', '.config', '.txt', '.json', '.yaml', '.yml'
+                )):
                     continue
 
                 file_path = os.path.join(root, file)
                 with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                     content = f.readlines()
 
+                modified_content = []
                 for i, line in enumerate(content, 1):
+                    modified_line = line
                     for label, pattern in patterns.items():
                         match = re.search(pattern, line)
                         if match:
+                            key_name = match.group(1)
+                            value = match.group(2)
+
                             results.append({
                                 "type": label,
                                 "file": file_path,
                                 "line": i,
                                 "content": line.strip()
                             })
+
+                            if auto_redact:
+                                # Overwrite sensitive value and modify key name
+                                redacted_key = f"{key_name}REDACTED"
+                                modified_line = re.sub(
+                                    pattern,
+                                    f'"{redacted_key}": "AUTOREDACTED"',
+                                    line
+                                )
+                                print(f"REDACTED {redacted_key} in {file}")
+                    modified_content.append(modified_line)
+
+                # If auto_redact is enabled, write the modified content back to the file
+                if auto_redact:
+                    with open(file_path, 'w', encoding='utf-8') as f:
+                        f.writelines(modified_content)
+
             except Exception as e:
-                print(f"Error reading {file}: {e}")
+                print(f"Error reading {file_path}: {e}")
 
     if results:
         print(f"Found {len(results)} potential sensitive data entries:")
@@ -208,7 +238,9 @@ def search_sensitive_data(directory):
             print(f"  {result['content']}")
     else:
         print("No sensitive data found.")
+
     return results
+
 
 def zip_directory(directory, output_filename):
     """
@@ -229,15 +261,22 @@ def zip_directory(directory, output_filename):
         print(f"Directory successfully zipped into '{output_filename}'.")
     except Exception as e:
         print(f"Error zipping directory: {e}")
-        
+
 
 if __name__ == "__main__":
     directory_to_scan = None
+    auto_redact = False
     if len(sys.argv) > 1:
-        directory_to_scan = sys.argv[1]  # Get the first argument
+        # Parse command-line arguments
+        if len(sys.argv) > 1:
+            for arg in sys.argv[1:]:
+                if arg in ("--autoredact", "-a"):
+                    auto_redact = True
+                else:
+                    directory_to_scan = arg
         print(f"Using passed in directory: {directory_to_scan}")
     else:
-    	directory_to_scan = input("Enter the directory path to scan: ").strip()
+        directory_to_scan = input("Enter the directory path to scan: ").strip()
 
     if not directory_to_scan or directory_to_scan == "/":
         print("Error: Invalid directory path. Cannot proceed with root directory or blank input.")
@@ -246,21 +285,22 @@ if __name__ == "__main__":
     if os.path.isdir(directory_to_scan):
         log_file = "config_and_source_files.log"
         tree_file = "directory_tree.log"
-        
+
         delete_known_fat_folders_and_files(directory_to_scan)
         delete_folders(directory_to_scan, 'venv')
         delete_folders(directory_to_scan, '.git')
         redact_folders(directory_to_scan, 'images')
         redact_folders(directory_to_scan, 'accounts')
 
+        results = search_sensitive_data(directory_to_scan, auto_redact=auto_redact)
+
         cat_config_and_source_files(directory_to_scan, log_file)
         save_tree_output(directory_to_scan, tree_file)
 
-        results = search_sensitive_data(directory_to_scan)
         if results:
             print("Error: Cannot proceed with sensitive data.")
             sys.exit(2)
-            
+
         zip_directory(directory_to_scan, "packageForSharing.zip")
     else:
         print("Invalid directory path.")
